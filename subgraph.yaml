@@ -1,0 +1,17 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: near
+    name: demo
+    network: near-testnet
+    source:
+      account: "dev-1682014826037-50515912441276"
+    mapping:
+      apiVersion: 0.0.5
+      language: wasm/assemblyscript
+      entities:
+        - ExampleEntity
+      receiptHandlers:
+        - handler: handleReceipt
+      file: ./src/demo.ts
