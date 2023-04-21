@@ -8,7 +8,7 @@ dataSources:
     source:
       account: "dev-1682014826037-50515912441276"
     mapping:
-      apiVersion: 0.0.5
+      apiVersion: 0.0.6
       language: wasm/assemblyscript
       entities:
         - ExampleEntity
