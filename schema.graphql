@@ -1,5 +1,27 @@
-type ExampleEntity @entity {
+type Book @entity {
   id: ID!
-  block: Bytes!
-  count: BigInt!
+  author: String!
+  description: String!
+  price: BigDecimal!
+  stock: BigInt!
+  title: String!
+  year: BigInt!
+  timestamp: BigInt!
 }
+
+type Sale @entity{
+  id: ID!
+  book: Book!
+  price: BigDecimal!
+  owner: Profile!
+  timestamp: BigInt!
+}
+
+type Profile @entity {
+  id: ID!
+  name: String!
+  bio: String!
+  books: [Sale!]! @derivedFrom(field: "owner")
+  timestamp: BigInt!
+}
+

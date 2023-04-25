@@ -1,34 +1,147 @@
-import { near, BigInt } from "@graphprotocol/graph-ts"
-import { ExampleEntity } from "../generated/schema"
+import { near, BigInt, log, BigDecimal, JSONValue, JSONValueKind, json } from "@graphprotocol/graph-ts";
+import { Profile, Book, Sale } from "../generated/schema";
 
 export function handleReceipt(
-  receiptWithOutcome: near.ReceiptWithOutcome
+  receipt: near.ReceiptWithOutcome
 ): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(receiptWithOutcome.receipt.id.toHex())
+  const actions = receipt.receipt.actions;
+  for (let i = 0; i < actions.length; i++) {
+    handleAction(
+      actions[i],
+      receipt.receipt,
+      receipt.block.header,
+      receipt.outcome,
+      receipt.receipt.signerPublicKey
+    );
+  }
+}
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (!entity) {
-    entity = new ExampleEntity(receiptWithOutcome.receipt.id.toHex())
-
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
+function handleAction(
+  action: near.ActionValue,
+  receipt: near.ActionReceipt,
+  blockHeader: near.BlockHeader,
+  outcome: near.ExecutionOutcome,
+  publicKey: near.PublicKey
+): void {
+  if (action.kind !== near.ActionKind.FUNCTION_CALL) {
+    log.info("Early return: {}", ["Not a function call"]);
+    return;
   }
 
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
+  const functionCall = action.toFunctionCall();
 
-  // Entity fields can be set based on receipt information
-  entity.block = receiptWithOutcome.block.header.hash
+  if(functionCall.methodName == "create_profile"){
+    //log.warning("Log:{}",[outcome.logs[0]])
+    let name = ""
+    let bio = ""
+    let jsonData = outcome.logs[0]
+    let parsedJSON = json.fromString(jsonData.replace("EVENT_JSON:", ""));
+    let entry = parsedJSON.toObject();
+    let data = entry.entries[0].value.toObject();
+    for (let i = 0; i < data.entries.length; i++) {
+      let key = data.entries[i].key.toString();
+      //log.warning("Key:{} Pos:{}",[data.entries[i].key.toString(),i.toString()])
+      switch (true) {
+        case key == "bio":
+          bio = data.entries[i].value.toString();
+          break;
+        case key == "name":
+          name = data.entries[i].value.toString();
+          break;
+      }
+    }
+    let profile = Profile.load(receipt.signerId)
+    if(profile == null){
+      profile = new Profile(receipt.signerId)
+    }
+    profile.bio = bio
+    profile.name = name
+    profile.timestamp = BigInt.fromString(blockHeader.timestampNanosec.toString())
+    profile.save()
+  }
 
-  // Entities can be written to the store with `.save()`
-  entity.save()
+  if(functionCall.methodName == "create_book"){
+    let author = ""
+    let id = ""
+    let description = ""
+    let price = ""
+    let stock = BigInt.zero()
+    let title = ""
+    let year  = BigInt.zero()
+    let jsonData = outcome.logs[0]
+    let parsedJSON = json.fromString(jsonData.replace("EVENT_JSON:", ""));
+    let entry = parsedJSON.toObject();
+    let data = entry.entries[0].value.toObject();
+    for (let i = 0; i < data.entries.length; i++) {
+      let key = data.entries[i].key.toString();
+      switch (true) {
+        case key == "author":
+          author = data.entries[i].value.toString();
+          break;
+        case key == "book_id":
+          id = data.entries[i].value.toI64().toString();
+          break;
+        case key == "description":
+          description = data.entries[i].value.toString()
+          break;
+        case key == 'price':
+          price = data.entries[i].value.toF64().toString()
+          break;
+        case key == 'stock':
+          stock = data.entries[i].value.toBigInt()
+          break;
+        case key == 'title':
+          title = data.entries[i].value.toString()
+          break;
+        case key == 'year':
+          year = data.entries[i].value.toBigInt()
+          break;
+      }
+    }
+    let book = Book.load(id)
+    if(book==null){
+      book = new Book(id)
+    }
+    book.author = author
+    book.description = description
+    book.price = BigDecimal.fromString(price)
+    book.stock = stock
+    book.title = title
+    book.year = year
+    book.timestamp = BigInt.fromString(blockHeader.timestampNanosec.toString())
+    book.save()
+  }
 
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
+  if(functionCall.methodName == "buy_book"){
+    let owner = ""
+    let id = ""
+    let jsonData = outcome.logs[0]
+    let parsedJSON = json.fromString(jsonData.replace("EVENT_JSON:", ""));
+    let entry = parsedJSON.toObject();
+    let data = entry.entries[0].value.toObject();
+    for (let i = 0; i < data.entries.length; i++) {
+      let key = data.entries[i].key.toString();
+      switch (true) {
+        case key == "owner":
+          owner = data.entries[i].value.toString();
+          break;
+        case key == "book_id":
+          id = data.entries[i].value.toI64().toString();
+          break;
+      }
+    }
+    let book = Book.load(id)
+    if(book==null){
+      book = new Book(id)
+    }
+    book.stock = BigInt.fromString((book.stock - BigInt.fromI32(1)).toString())
+    let sale = new Sale(receipt.id.toHexString())
+    sale.book = id
+    sale.price = book.price
+    sale.owner = owner
+    sale.timestamp = BigInt.fromString(blockHeader.timestampNanosec.toString())
+    book.save()
+    sale.save()
+  }
+
 }
